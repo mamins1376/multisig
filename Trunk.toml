@@ -1,0 +1,18 @@
+[build]
+pattern_script = """<script type="module" async defer>
+  import init from "{base}{js}";
+
+  main().catch(e => { throw e; });
+
+  async function main() {
+    window.wasm = await load("{base}{wasm}");
+    window.glue = await load("{base}{js}")
+    window.inst = await init(window.wasm);
+    window.inst.mount();
+  }
+
+  async function load(url) {
+    const response = await fetch(url);
+    return await response.arrayBuffer();
+  }
+</script>"""
