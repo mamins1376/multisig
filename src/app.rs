@@ -5,7 +5,7 @@ use std::{
 };
 
 use eframe::{
-    egui::{CentralPanel, CtxRef, Slider, Ui},
+    egui::{CentralPanel, ComboBox, CtxRef, Slider, Ui},
     epi::Frame,
 };
 use js_sys::{global, Array, Reflect};
@@ -16,7 +16,7 @@ use web_sys::{
 };
 
 use crate::{
-    message::{ChannelParams, Message},
+    message::{ChannelParams, Message, WaveShape},
     worklet::WorkletUrl,
     Result,
 };
@@ -48,15 +48,31 @@ impl App {
             let mut set = false;
 
             let slider = Slider::new(&mut param.frequency, 0.0..=nyquist)
-                .logarithmic(true)
+                //.logarithmic(true)
                 .suffix("Hz")
                 .text(format!("Channel #{} Freq", i + 1));
             set |= ui.add(slider).changed();
 
-            let slider = Slider::new(&mut param.phase, 0.0..=360.)
+            let slider = Slider::new(&mut param.phase_degrees, 0.0..=360.)
                 .suffix("°")
                 .text(format!("Channel #{} Freq", i + 1));
             set |= ui.add(slider).changed();
+
+            ComboBox::from_label(format!("Channel #{} WaveShape", i + 1))
+                .selected_text(param.shape.name())
+                .show_ui(ui, |ui| {
+                    let mut f = |v: WaveShape| {
+                        let t = v.name();
+                        set |= ui
+                            .selectable_value(&mut param.shape, v, t)
+                            .changed()
+                    };
+
+                    f(WaveShape::Sine);
+                    f(WaveShape::Triangle);
+                    f(WaveShape::Square(0.5));
+                    f(WaveShape::Sawtooth);
+                });
 
             if set {
                 self.engine
@@ -66,24 +82,26 @@ impl App {
         }
 
         if self.engine.is_running() {
-            if ui.button("Stop").clicked() {
-                self.enque(|e| async move { e.stop().await })
-            }
-        } else if ui.button("Run").clicked() {
-            self.enque(|e| async move { e.run().await })
+            self.engine_button(ui, "Stop", |e| async move { e.stop().await })
+        } else {
+            self.engine_button(ui, "Start", |e| async move { e.run().await })
         }
     }
 
-    fn enque<F, P>(&self, f: F)
+    fn engine_button<C, F>(&self, ui: &mut Ui, label: &str, clicked: C)
     where
-        F: FnOnce(Rc<Engine>) -> P + 'static,
-        P: Future<Output = Result<()>>,
+        C: FnOnce(Rc<Engine>) -> F + 'static,
+        F: Future<Output = Result<()>>,
     {
-        let engine = self.engine.clone();
-        spawn_local(async move {
-            let result = f(engine).await;
-            result.map_err(throw_val).unwrap_or_else(|i| i)
-        })
+        if ui.button(label).clicked() {
+            let engine = self.engine.clone();
+            spawn_local(async move {
+                clicked(engine)
+                    .await
+                    .map_err(throw_val)
+                    .unwrap_or_else(|i| i)
+            })
+        }
     }
 }
 
@@ -113,11 +131,11 @@ impl Engine {
             .unwrap_or(false)
     }
 
-    fn sample_rate(&self) -> f32 {
+    fn sample_rate(&self) -> f64 {
         self.context
             .borrow()
             .as_ref()
-            .map(|x| x.sample_rate())
+            .map(|x| x.sample_rate() as f64)
             .unwrap_or(48000.)
     }
 
