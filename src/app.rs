@@ -69,10 +69,8 @@ impl App {
             if ui.button("Stop").clicked() {
                 self.enque(|e| async move { e.stop().await })
             }
-        } else {
-            if ui.button("Run").clicked() {
-                self.enque(|e| async move { e.run().await })
-            }
+        } else if ui.button("Run").clicked() {
+            self.enque(|e| async move { e.run().await })
         }
     }
 

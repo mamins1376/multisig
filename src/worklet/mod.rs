@@ -4,11 +4,6 @@ use web_sys::{
     AudioWorkletGlobalScope, Blob, BlobPropertyBag, MessageEvent, Url,
 };
 
-use std::{
-    f32::consts::TAU,
-    ops::{Add, Deref},
-};
-
 use crate::{
     message::{ChannelParams, Message},
     Result,
@@ -25,9 +20,7 @@ pub struct Processor {
 impl Processor {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Processor {
-        let channels = Default::default();
-        let buffer = [0f32; 128];
-        Processor { channels, buffer }
+        Self::default()
     }
 
     #[wasm_bindgen]
@@ -45,7 +38,7 @@ impl Processor {
     #[wasm_bindgen]
     pub fn process(&mut self, args: Array) -> bool {
         let scope: AudioWorkletGlobalScope = JsValue::from(global()).into();
-        let dp = TAU / scope.sample_rate();
+        let rate = scope.sample_rate();
 
         let mut count = 0;
 
@@ -55,7 +48,7 @@ impl Processor {
                     self.channels.push(Default::default());
                 }
 
-                self.channels[count].process(&mut self.buffer, dp);
+                self.channels[count].process(&mut self.buffer, rate);
 
                 buffer
                     .unchecked_into::<Float32Array>()
@@ -71,6 +64,14 @@ impl Processor {
     }
 }
 
+impl Default for Processor {
+    fn default() -> Self {
+        let channels = Default::default();
+        let buffer = [0f32; 128];
+        Processor { channels, buffer }
+    }
+}
+
 #[derive(Default)]
 struct Channel {
     params: ChannelParams,
@@ -78,8 +79,8 @@ struct Channel {
 }
 
 impl Channel {
-    fn process(&mut self, buf: &mut [f32], dp: f32) {
-        self.state.process(buf, &self.params, dp)
+    fn process(&mut self, buf: &mut [f32], rate: f32) {
+        self.state.process(buf, &self.params, rate)
     }
 
     fn reset(&mut self) {
@@ -96,16 +97,18 @@ impl From<ChannelParams> for Channel {
 
 #[derive(Default)]
 struct ChannelState {
-    phase: f32,
+    t: u32,
 }
 
 impl ChannelState {
-    fn process(&mut self, buf: &mut [f32], params: &ChannelParams, dp: f32) {
-        let dp = params.frequency * dp;
-        let offset = params.phase.to_radians();
+    fn process(&mut self, buf: &mut [f32], params: &ChannelParams, rate: f32) {
+        let p0 = params.phase.to_radians();
+
+        let w = params.frequency * std::f32::consts::TAU / rate;
+
         for b in buf {
-            *b = self.phase.add(offset).sin();
-            self.phase += dp;
+            *b = (self.t as f32).mul_add(w, p0).sin();
+            self.t += 1;
         }
     }
 }
@@ -114,8 +117,8 @@ pub struct WorkletUrl(String);
 
 impl WorkletUrl {
     pub fn create() -> Result<Self> {
-        static CODER_JS: &'static [u8] = include_bytes!("coder.js");
-        static INDEX_JS: &'static [u8] = include_bytes!("index.js");
+        static CODER_JS: &[u8] = include_bytes!("coder.js");
+        static INDEX_JS: &[u8] = include_bytes!("index.js");
 
         let blob = {
             // SAFETY: we never mutate the buffer, and it's 'static as well.
@@ -135,7 +138,7 @@ impl WorkletUrl {
     }
 }
 
-impl Deref for WorkletUrl {
+impl std::ops::Deref for WorkletUrl {
     type Target = String;
 
     fn deref(&self) -> &Self::Target {
