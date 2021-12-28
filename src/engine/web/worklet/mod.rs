@@ -1,3 +1,4 @@
+use bincode::deserialize;
 use js_sys::{global, Array, Float32Array, Reflect, Uint8Array};
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{
@@ -24,10 +25,10 @@ impl Processor {
     }
 
     #[wasm_bindgen]
-    pub fn message(&mut self, message: MessageEvent) -> Result<()> {
+    pub fn message(&mut self, event: MessageEvent) -> Result<()> {
         use Message::*;
 
-        match Message::receive(message)? {
+        match message_from_event(event)? {
             SetParams(i, p) => self.channels[i] = p.into(),
             Reset => self.channels.iter_mut().for_each(Channel::reset),
         }
@@ -62,6 +63,13 @@ impl Processor {
 
         count != 0
     }
+}
+
+fn message_from_event(event: MessageEvent) -> Result<Message> {
+    let data: Uint8Array = event.data().dyn_into()?;
+    let message = deserialize(data.to_vec().as_ref())
+        .map_err(|e| format!("malformed message received: {}", e))?;
+    Ok(message)
 }
 
 impl Default for Processor {

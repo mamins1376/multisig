@@ -6,7 +6,8 @@ use std::{
     rc::Rc,
 };
 
-use js_sys::{global, Array, Reflect};
+use bincode::serialize;
+use js_sys::{global, Array, Reflect, Uint8Array};
 use wasm_bindgen::throw_val;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{
@@ -58,7 +59,12 @@ impl Engine for WebEngine {
     }
 
     fn signal(&mut self, message: Message) -> Result<()> {
-        message.send(&self.inner.worklet()?.port()?)
+        let port = self.inner.worklet()?.port()?;
+
+        let bytes = serialize(&message)
+            .map_err(|e| format!("serializing message failed: {}", e))?;
+        let bytes = Uint8Array::from(bytes.as_slice());
+        port.post_message(&bytes)
     }
 
     fn run(&mut self) {

@@ -23,5 +23,4 @@ pub fn mount() -> Result<()> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn main() {
-}
+fn main() {}

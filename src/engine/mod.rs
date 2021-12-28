@@ -4,7 +4,7 @@ pub mod web;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native;
 
-use crate::{Result, message::Message};
+use crate::{message::Message, Result};
 
 pub trait Engine {
     fn is_running(&mut self) -> bool;
