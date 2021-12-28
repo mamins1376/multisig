@@ -8,22 +8,54 @@ use std::{
 
 use bincode::serialize;
 use js_sys::{global, Array, Reflect, Uint8Array};
-use wasm_bindgen::throw_val;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{
     AudioContext, AudioContextState, AudioWorkletNode, AudioWorkletNodeOptions,
 };
 
-use crate::{message::Message, Result};
+use crate::{app::App, message::Message};
 
-use super::Engine;
+type Result<T> = std::result::Result<T, wasm_bindgen::JsValue>;
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn mount() -> Result<()> {
+    console_error_panic_hook::set_once();
+    eframe::start_web("app", Box::<App>::default())
+}
 
 #[derive(Default)]
-pub struct WebEngine {
+pub struct Engine {
     inner: Rc<EngineInner>,
 }
 
-impl WebEngine {
+impl Engine {
+    pub fn is_running(&mut self) -> bool {
+        use AudioContextState::Running;
+        self.context_map(|x| x.state() == Running, false)
+    }
+
+    pub fn sample_rate(&mut self) -> f64 {
+        self.context_map(|x| x.sample_rate(), 48000.) as _
+    }
+
+    pub fn signal(&mut self, message: Message) {
+        self.message(message).unwrap()
+    }
+
+    pub fn run(&mut self) {
+        if !self.is_running() {
+            self.spawn(|i| async move { i.run().await })
+        }
+    }
+
+    pub fn stop(&mut self) {
+        if self.is_running() {
+            self.spawn(|e| async move { e.stop().await })
+        }
+    }
+}
+
+impl Engine {
     fn context_map<T, F>(&self, f: F, default: T) -> T
     where
         F: FnOnce(&AudioContext) -> T,
@@ -43,40 +75,20 @@ impl WebEngine {
     {
         let inner = self.inner.clone();
         spawn_local(async move {
-            apply(inner).await.map_err(throw_val).unwrap_or_else(|i| i)
+            apply(inner)
+                .await
+                .map_err(wasm_bindgen::throw_val)
+                .unwrap_or_else(|i| i)
         })
     }
-}
 
-impl Engine for WebEngine {
-    fn is_running(&mut self) -> bool {
-        use AudioContextState::Running;
-        self.context_map(|x| x.state() == Running, false)
-    }
-
-    fn sample_rate(&mut self) -> f64 {
-        self.context_map(|x| x.sample_rate(), 48000.) as _
-    }
-
-    fn signal(&mut self, message: Message) -> Result<()> {
+    fn message(&self, message: Message) -> Result<()> {
         let port = self.inner.worklet()?.port()?;
 
         let bytes = serialize(&message)
             .map_err(|e| format!("serializing message failed: {}", e))?;
         let bytes = Uint8Array::from(bytes.as_slice());
         port.post_message(&bytes)
-    }
-
-    fn run(&mut self) {
-        if !self.is_running() {
-            self.spawn(|i| async move { i.run().await })
-        }
-    }
-
-    fn stop(&mut self) {
-        if self.is_running() {
-            self.spawn(|e| async move { e.stop().await })
-        }
     }
 }
 

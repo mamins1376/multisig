@@ -5,10 +5,9 @@ use web_sys::{
     AudioWorkletGlobalScope, Blob, BlobPropertyBag, MessageEvent, Url,
 };
 
-use crate::{
-    message::{ChannelParams, Message, WaveShape},
-    Result,
-};
+use crate::message::{ChannelParams, Message, WaveShape};
+
+use super::Result;
 
 // TODO: sed s,MessagePort,SharedArrayBuffer,g
 #[wasm_bindgen]

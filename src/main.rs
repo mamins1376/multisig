@@ -1,29 +1,19 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 mod app;
-mod engine;
 mod message;
 
-#[cfg(target_arch = "wasm32")]
-type Error = wasm_bindgen::JsValue;
-
 #[cfg(not(target_arch = "wasm32"))]
-#[derive(Debug)]
-pub enum Error {}
-
-type Result<T> = std::result::Result<T, Error>;
+#[path = "native.rs"]
+mod platform;
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen::prelude::wasm_bindgen]
-pub fn mount() -> Result<()> {
-    console_error_panic_hook::set_once();
+#[path = "web/mod.rs"]
+mod platform;
 
-    type App = Box<app::App<engine::web::WebEngine>>;
-    eframe::start_web("app", App::default())
-}
-
+// bummer: main() must be in main.rs (otherwise E0601)
 #[cfg(not(target_arch = "wasm32"))]
+#[inline]
 fn main() {
-    type App = Box<app::App<engine::native::NativeEngine>>;
-    eframe::run_native(App::default(), Default::default());
+    platform::main()
 }

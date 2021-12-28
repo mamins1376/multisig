@@ -4,17 +4,17 @@ use eframe::{
 };
 
 use crate::{
-    engine::Engine,
     message::{ChannelParams, Message, WaveShape},
+    platform::Engine,
 };
 
 #[derive(Default)]
-pub struct App<E> {
-    engine: E,
+pub struct App {
+    engine: Engine,
     params: [ChannelParams; 2],
 }
 
-impl<E: Engine> eframe::epi::App for App<E> {
+impl eframe::epi::App for App {
     fn name(&self) -> &str {
         "App"
     }
@@ -57,15 +57,13 @@ impl<E: Engine> eframe::epi::App for App<E> {
                     });
 
                 if set {
-                    self.engine
-                        .signal(Message::SetParams(i, param.clone()))
-                        .unwrap()
+                    self.engine.signal(Message::SetParams(i, param.clone()))
                 }
             }
 
             let (label, act) = match self.engine.is_running() {
-                false => ("Run", E::run as _),
-                true => ("Stop", E::stop as fn(&mut E)),
+                false => ("Run", Engine::run as _),
+                true => ("Stop", Engine::stop as fn(&mut Engine)),
             };
             if ui.button(label).clicked() {
                 act(&mut self.engine)
