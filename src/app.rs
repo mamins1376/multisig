@@ -9,12 +9,12 @@ use crate::{
 };
 
 #[derive(Default)]
-pub struct App {
-    engine: Engine,
+pub struct App<E> {
+    engine: E,
     params: [ChannelParams; 2],
 }
 
-impl eframe::epi::App for App {
+impl<E: Engine> eframe::epi::App for App<E> {
     fn name(&self) -> &str {
         "App"
     }
@@ -64,8 +64,8 @@ impl eframe::epi::App for App {
             }
 
             let (label, act) = match self.engine.is_running() {
-                false => ("Run", Engine::run as _),
-                true => ("Stop", Engine::stop as fn(&mut Engine)),
+                false => ("Run", E::run as _),
+                true => ("Stop", E::stop as fn(&mut E)),
             };
             if ui.button(label).clicked() {
                 act(&mut self.engine)

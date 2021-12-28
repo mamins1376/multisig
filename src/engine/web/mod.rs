@@ -1,3 +1,5 @@
+mod worklet;
+
 use std::{
     cell::{Cell, Ref, RefCell},
     future::Future,
@@ -11,39 +13,16 @@ use web_sys::{
     AudioContext, AudioContextState, AudioWorkletNode, AudioWorkletNodeOptions,
 };
 
-use crate::{message::Message, worklet::WorkletUrl, Result};
+use crate::{message::Message, Result};
+
+use super::Engine;
 
 #[derive(Default)]
-pub struct Engine {
+pub struct WebEngine {
     inner: Rc<EngineInner>,
 }
 
-impl Engine {
-    pub fn is_running(&mut self) -> bool {
-        use AudioContextState::Running;
-        self.context_map(|x| x.state() == Running, false)
-    }
-
-    pub fn sample_rate(&mut self) -> f64 {
-        self.context_map(|x| x.sample_rate(), 48000.) as _
-    }
-
-    pub fn signal(&mut self, message: Message) -> Result<()> {
-        message.send(&self.inner.worklet()?.port()?)
-    }
-
-    pub fn run(&mut self) {
-        if !self.is_running() {
-            self.spawn(|i| async move { i.run().await })
-        }
-    }
-
-    pub fn stop(&mut self) {
-        if self.is_running() {
-            self.spawn(|e| async move { e.stop().await })
-        }
-    }
-
+impl WebEngine {
     fn context_map<T, F>(&self, f: F, default: T) -> T
     where
         F: FnOnce(&AudioContext) -> T,
@@ -65,6 +44,33 @@ impl Engine {
         spawn_local(async move {
             apply(inner).await.map_err(throw_val).unwrap_or_else(|i| i)
         })
+    }
+}
+
+impl Engine for WebEngine {
+    fn is_running(&mut self) -> bool {
+        use AudioContextState::Running;
+        self.context_map(|x| x.state() == Running, false)
+    }
+
+    fn sample_rate(&mut self) -> f64 {
+        self.context_map(|x| x.sample_rate(), 48000.) as _
+    }
+
+    fn signal(&mut self, message: Message) -> Result<()> {
+        message.send(&self.inner.worklet()?.port()?)
+    }
+
+    fn run(&mut self) {
+        if !self.is_running() {
+            self.spawn(|i| async move { i.run().await })
+        }
+    }
+
+    fn stop(&mut self) {
+        if self.is_running() {
+            self.spawn(|e| async move { e.stop().await })
+        }
     }
 }
 
@@ -101,7 +107,7 @@ impl EngineInner {
         let context = self.context()?;
         let worklet = context.audio_worklet()?;
 
-        let url = WorkletUrl::create()?;
+        let url = worklet::WorkletUrl::create()?;
         let loaded = worklet.add_module(&url)?;
         JsFuture::from(loaded).await?;
 

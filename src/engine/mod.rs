@@ -1,11 +1,19 @@
 #[cfg(target_arch = "wasm32")]
-mod web;
+pub mod web;
 
 #[cfg(not(target_arch = "wasm32"))]
-mod native;
+pub mod native;
 
-#[cfg(target_arch = "wasm32")]
-pub use web::*;
+use crate::{Result, message::Message};
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use native::*;
+pub trait Engine {
+    fn is_running(&mut self) -> bool;
+
+    fn sample_rate(&mut self) -> f64;
+
+    fn signal(&mut self, message: Message) -> Result<()>;
+
+    fn run(&mut self);
+
+    fn stop(&mut self);
+}
