@@ -1,12 +1,15 @@
+#[cfg(target_arch = "wasm32")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(target_arch = "wasm32", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub enum Message {
     SetParams(usize, ChannelParams),
     Reset,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(target_arch = "wasm32", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct ChannelParams {
     pub shape: WaveShape,
     pub amplitude_db: f64,
@@ -27,7 +30,8 @@ impl Default for ChannelParams {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[cfg_attr(target_arch = "wasm32", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WaveShape {
     Sine,
     Triangle,

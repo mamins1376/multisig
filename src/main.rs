@@ -9,7 +9,7 @@ type Error = wasm_bindgen::JsValue;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug)]
-enum Error {}
+pub enum Error {}
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -23,4 +23,7 @@ pub fn mount() -> Result<()> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn main() {}
+fn main() {
+    type App = Box<app::App<engine::native::NativeEngine>>;
+    eframe::run_native(App::default(), Default::default());
+}
