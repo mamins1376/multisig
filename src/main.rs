@@ -1,5 +1,7 @@
 #![recursion_limit = "1024"]
 
+#![cfg_attr(target_arch = "wasm32", no_main)]
+
 mod app;
 mod message;
 mod worklet;
