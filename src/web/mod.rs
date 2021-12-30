@@ -13,7 +13,7 @@ use web_sys::{
     AudioContext, AudioContextState, AudioWorkletNode, AudioWorkletNodeOptions,
 };
 
-use crate::{app::App, message::Message};
+use crate::{app::App, core::Message};
 
 type Result<T> = std::result::Result<T, wasm_bindgen::JsValue>;
 

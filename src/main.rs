@@ -1,10 +1,10 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 mod app;
-mod message;
+mod core;
 
 #[cfg(not(target_arch = "wasm32"))]
-#[path = "native.rs"]
+#[path = "native/mod.rs"]
 mod platform;
 
 #[cfg(target_arch = "wasm32")]

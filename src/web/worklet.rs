@@ -5,15 +5,12 @@ use web_sys::{
     AudioWorkletGlobalScope, Blob, BlobPropertyBag, MessageEvent, Url,
 };
 
-use crate::message::{ChannelParams, Message, WaveShape};
-
 use super::Result;
 
-// TODO: sed s,MessagePort,SharedArrayBuffer,g
 #[wasm_bindgen]
+#[derive(Default)]
 pub struct Processor {
-    channels: Vec<Channel>,
-    buffer: [f32; 128],
+    inner: crate::core::Processor,
 }
 
 #[wasm_bindgen]
@@ -25,122 +22,38 @@ impl Processor {
 
     #[wasm_bindgen]
     pub fn message(&mut self, event: MessageEvent) -> Result<()> {
-        use Message::*;
-
-        match message_from_event(event)? {
-            SetParams(i, p) => self.channels[i] = p.into(),
-            Reset => self.channels.iter_mut().for_each(Channel::reset),
-        }
-
+        let data: Uint8Array = event.data().dyn_into()?;
+        let message = deserialize(data.to_vec().as_ref())
+            .map_err(|e| format!("malformed message received: {}", e))?;
+        self.inner.message(message);
         Ok(())
     }
 
     #[wasm_bindgen]
     pub fn process(&mut self, args: Array) -> bool {
+        let output = args
+            .get(1)
+            .unchecked_into::<Array>()
+            .get(0)
+            .unchecked_into::<Array>();
+
+        let channels: Vec<Float32Array> =
+            output.iter().map(JsValue::unchecked_into).collect();
+
+        let n_samples = match channels.first() {
+            Some(b) => b.length() as usize,
+            None => return false,
+        };
+
         let scope: AudioWorkletGlobalScope = JsValue::from(global()).into();
         let rate = scope.sample_rate();
+        let buf = self.inner.process(channels.len(), n_samples, rate);
 
-        let mut count = 0;
+        buf.chunks_exact(n_samples)
+            .zip(channels)
+            .for_each(|(b, a)| a.copy_from(b));
 
-        for output in args.get(1).unchecked_into::<Array>().iter() {
-            for buffer in output.unchecked_into::<Array>().iter() {
-                if self.channels.len() == count {
-                    self.channels.push(Default::default());
-                }
-
-                self.channels[count].process(&mut self.buffer, rate);
-
-                buffer
-                    .unchecked_into::<Float32Array>()
-                    .copy_from(&self.buffer);
-
-                count += 1
-            }
-        }
-
-        self.channels.truncate(count);
-
-        count != 0
-    }
-}
-
-fn message_from_event(event: MessageEvent) -> Result<Message> {
-    let data: Uint8Array = event.data().dyn_into()?;
-    let message = deserialize(data.to_vec().as_ref())
-        .map_err(|e| format!("malformed message received: {}", e))?;
-    Ok(message)
-}
-
-impl Default for Processor {
-    fn default() -> Self {
-        let channels = Default::default();
-        let buffer = [0.; 128];
-        Processor { channels, buffer }
-    }
-}
-
-#[derive(Default)]
-struct Channel {
-    params: ChannelParams,
-    state: ChannelState,
-}
-
-impl Channel {
-    fn process(&mut self, buf: &mut [f32], rate: f32) {
-        self.state.process(buf, &self.params, rate)
-    }
-
-    fn reset(&mut self) {
-        self.state = Default::default();
-    }
-}
-
-impl From<ChannelParams> for Channel {
-    fn from(params: ChannelParams) -> Self {
-        let state = Default::default();
-        Self { params, state }
-    }
-}
-
-#[derive(Default)]
-struct ChannelState {
-    t: u32,
-}
-
-impl ChannelState {
-    fn process(&mut self, buf: &mut [f32], params: &ChannelParams, rate: f32) {
-        use std::f64::consts::TAU;
-
-        let rate = rate as f64;
-        let amp = 10f64.powf(params.amplitude_db / 20.);
-        let theta = params.phase_degrees.to_radians();
-
-        // TODO: optimize this
-        let w = params.frequency * TAU / rate;
-        for b in buf {
-            let p = (self.t as f64).mul_add(w, theta);
-            self.t += 1;
-
-            // i hope the compiler moves this out of the loop
-            let form = match params.shape {
-                WaveShape::Sine => p.sin(),
-                WaveShape::Triangle => match (p / TAU).fract() * 4. {
-                    p if p < 1. => p,
-                    p if p < 3. => 2. - p,
-                    p => p - 4.,
-                },
-                WaveShape::Square(d) => {
-                    if (p / TAU).fract() < d {
-                        1.
-                    } else {
-                        -1.
-                    }
-                }
-                WaveShape::Sawtooth => (p / TAU).fract().mul_add(-2., 1.),
-            };
-
-            *b = (form * amp) as f32;
-        }
+        true
     }
 }
 

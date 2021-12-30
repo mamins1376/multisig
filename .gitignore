@@ -1,4 +1,5 @@
 /.vim/
+/.ccls*
 /target/
 /dist/
 /Cargo.lock

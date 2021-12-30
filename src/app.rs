@@ -4,7 +4,7 @@ use eframe::{
 };
 
 use crate::{
-    message::{ChannelParams, Message, WaveShape},
+    core::{ChannelParams, Message, WaveShape},
     platform::Engine,
 };
 
